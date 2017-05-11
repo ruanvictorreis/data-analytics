@@ -1,0 +1,263 @@
+---
+title: "Tipos de Filmes"
+author: ""
+date: "25 de abril de 2017"
+output: html_document
+---
+
+## 1. Introdução
+
+Este trabalho tem por objetivo descrever e explorar a estrutura de determinados grupos de filmes que foram produzidos nos Estados Unidos da América (EUA). Para realizar tal trabalho, utilizamos os dados disponibilizados pelo Kaggle (https://www.kaggle.com/deepmatrix/imdb-5000-movie-dataset), uma plataforma onde podemos encontrar informações sobre mais de 5 mil filmes de diversas épocas e países.
+
+Estamos interessados em analisar as seguintes variáveis para caracterizar e explorar os grupos de filmes formados pelas técnicas de agrupamento:
+
+* **gross:** Total de bilheteria arrecadado pelo filme (em dólar).
+
+* **budget:** Orçamento para produção do filme (em dólar).
+
+* **duration:** Duração do filme em minutos.
+
+* **imdb_score:** Média das notas atribuídas ao filme pelos usuários do IMDb.
+
+* **movie_facebook_likes:** Quantidade de likes que o filme possui no Facebook.
+
+```{r setup, include=FALSE}
+
+library(readr)
+library(dplyr, warn.conflicts = F)
+library(ggplot2)
+library(cluster)
+library(ggdendro)
+library(tidyverse, warn.conflicts = F)
+library(rvest)
+library(plotly)
+library(tibble)
+
+dados_filmes = read_csv("dados/movie_metadata.csv")
+
+formata_label = function(l){
+  # existem funções para formatar com , sendo milhar e . sendo decimal (scales::comma)
+  # mas em pt_br é o contrário. essa função serve para isso
+  format(l, big.mark = ".", scientific = FALSE, trim = TRUE, decimal.mark = ",")
+}
+
+```
+
+
+## 2. Descrição das Variáveis
+
+### 2.1 gross
+
+```{r, message=FALSE, warning=FALSE}
+
+summary(dados_filmes$gross)
+
+dados_filmes %>% 
+    ggplot(aes(x = "Filmes", y = gross)) + 
+    scale_y_continuous(labels = formata_label) +
+    labs(y = "Total de bilheteria (US$)") +
+    geom_jitter(width = .01, height = 0, size = 2, alpha = .6)
+
+```
+
+
+### 2.2 budget
+
+```{r, message=FALSE, warning=FALSE}
+
+summary(dados_filmes$budget)
+
+dados_filmes %>% 
+    ggplot(aes(x = "Filmes", y = budget)) + 
+    scale_y_continuous(labels = formata_label) +
+    labs(y = "Orçamento de produção (US$)") +
+    geom_jitter(width = .01, height = 0, size = 2, alpha = .6)
+
+```
+
+### 2.3 duration
+
+```{r, message=FALSE, warning=FALSE}
+
+summary(dados_filmes$duration)
+
+dados_filmes %>% 
+    ggplot(aes(x = "Filmes", y = duration)) + 
+    labs(y = "Duração (min)") +
+    geom_jitter(width = .01, height = 0, size = 2, alpha = .6)
+
+```
+
+### 2.4 imdb_score
+
+```{r, message=FALSE, warning=FALSE}
+
+summary(dados_filmes$imdb_score)
+
+dados_filmes %>% 
+    ggplot(aes(x = "Filmes", y = imdb_score)) + 
+    labs(y = "Média de avaliação (min)") +
+    geom_jitter(width = .01, height = 0, size = 2, alpha = .6)
+
+```
+
+### 2.5 movie_facebook_likes
+
+```{r, message=FALSE, warning=FALSE}
+
+summary(dados_filmes$movie_facebook_likes)
+
+dados_filmes %>% 
+    ggplot(aes(x = "Filmes", y = movie_facebook_likes)) + 
+    scale_y_continuous(labels = formata_label) +
+    labs(y = "Likes no Facebook") +
+    geom_jitter(width = .01, height = 0, size = 2, alpha = .6)
+
+```
+
+## 3. Tratamento de Dados
+
+Analisando as informações proveniente do Kaggle, resolvemos delimitar nosso escopo apenas para filmes que foram produzidos nos EUA. Além disso, observamos algumas inconsistências existentes nos dados que precisam ser tratadas. 
+
+A seguir está descrito as inconsistências encontradas no dataset:
+
+* alguns valores estavam faltando para as variáveis gross e budget.
+
+* existiam observações duplicadas na base de dados, ou seja, alguns filmes repetidos.
+
+Segundo reportado pelo Kaggle, o motivo da ausência de valores pode ter ocorrido porque o valor não foi encontrado na página do filme ou por alguma falha na requisição http responsável por coletar os dados. Desta forma, as observações faltantes foram desconsideradas da análise e optamos também pela remoção das observações duplicadas. O dataset resultante possui 2097 observações com 5 variáveis numéricas mais o título do filme.
+
+```{r}
+filmes_usa = dados_filmes %>%
+  filter(country == "USA") %>%
+  filter(!duplicated(movie_title)) %>%
+  select(gross, budget, duration, imdb_score, movie_facebook_likes, movie_title)
+
+filmes_usa = filmes_usa %>%
+  filter(complete.cases(filmes_usa))
+
+```
+
+## 4. Critérios de Escolha para o Número de Grupos
+
+Para escolher a quantidade de grupos utilizamos a) o dendrograma b) Dissimilaridade na junção. 
+
+### 4.1 Dendrograma
+
+A altura no dendrograma em cada passo significa a dissimilaridade entre os pontos ou grupos juntados naquele passo.
+
+```{r}
+agrupamento_h = filmes_usa %>% 
+  select(gross, budget, duration, imdb_score, movie_facebook_likes)%>%
+  dist(method = "euclidean") %>% 
+  hclust(method = "complete")
+
+ggdendrogram(agrupamento_h, rotate = T, size = 2) + 
+    geom_hline(yintercept =250000000, colour = "red")
+```
+
+Como pode ser observado no dendrograma acima, levando em consideração as cinco variáveis númericas mais o nome do filme apenas como forma de identificação, foram escolhidos 6 grupos. Poderíamos ter traçado a linha em uma altura mais baixa de forma a agrupar mais, porém optamos por manter o número de grupos mais baixo para uma melhor compreensão acerca dos mesmos. Utilizamos o método "complete" uma vez que tende a produzir grupos mais compactos.
+
+### 4.2 Dissimilaridade da Junção
+Na medida que vamos aglomerando, as dissimilaridades nas junções tendem a ir aumentando caso haja estrutura de grupos. Dessa forma, percebemos que uma maior dissimilaridade é apresentada entre as junções 1 e 6 (de trás para frente). Levando em consideração também o dendrograma, podemos considerar que o número ideal de grupos para ser utilizado na análise é 6 (seis). 
+
+```{r}
+data.frame(k = 1:NROW(agrupamento_h$height), 
+           height = agrupamento_h$height) %>% 
+    ggplot(aes(x = k, y = height)) + 
+    geom_line(colour = "grey") + 
+    geom_point() + 
+    labs(x = "Junções feitas", y = "Dissimilaridade na junção")
+```
+
+## 5. Avaliação do Agrupamento
+
+### 5.1 Silhoueta
+
+A silhueta nos permite avaliar o quão cada ponto ou grupo está perto de outros pontos e grupos vizinhos, ou seja, o quão bem os dados foram agrupados. Quando observarmos a silhueta para os grupos encontrados, percebemos que foram razoavelmente bem, exceto pelo último e penúltimo grupo com alguns pontos mal agrupados.
+
+```{r}
+distancias = filmes_usa %>% 
+    select(gross, budget, duration, imdb_score, movie_facebook_likes) %>%
+    dist(method = "euclidean")
+
+cores = RColorBrewer::brewer.pal(6, "Set3")
+plot(cluster::silhouette(cutree(agrupamento_h, k = 6), distancias), col = cores, border = NA)
+```
+
+### 5.2 Distinção dos Grupos
+
+```{r, message=FALSE, warning=FALSE}
+
+atribuicoes = tibble(k = 1:6) %>% 
+    group_by(k) %>% 
+    do(cbind(filmes_usa, grupo = as.character(cutree(agrupamento_h, .$k))))
+
+atribuicoes_long = atribuicoes %>% 
+    mutate(gross = scale(gross), 
+           budget = scale(budget), 
+           duration = scale(duration), 
+           imdb_score = scale(imdb_score), 
+           movie_facebook_likes= scale(movie_facebook_likes)) %>% 
+    gather(key = "variavel", value = "valor",  -movie_title, -grupo, -k)
+
+atribuicoes_long %>%
+  filter(k == 6) %>%
+  ggplot(aes(x = variavel, 
+               y = valor, 
+               colour = grupo)) + 
+  geom_boxplot() + 
+  geom_point(alpha = .4, position = position_jitter(width = .1)) + 
+  facet_wrap(~ grupo) + 
+  labs(x = "", y = "z-score") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+O gráfico apresentado possibilita enxergar os aspectos principais que caracterizam cada grupo, ou seja, podemos ver quais são as variáveis que se destacam. Além disso, é possível perceber que todos os grupos são distintos, no entanto, alguns se parecem um pouco, por exemplo os grupos 4, 5 e 6. No próximo tópico, iremos discutir mais sobre as diferenças e as semelhanças existentes entre eles.
+
+## 6. Análise dos Grupos e Conclusão
+
+Para identificar características, diferenças e semelhanças entre os grupos, utilizamos o seguinte gráfico que nos permite obter uma visão geral sobre o agrupamento realizado.
+
+```{r, message=FALSE, warning=FALSE}
+
+atribuicoes_long %>% 
+    filter(k == 6) %>%
+    ggplot(aes(x = variavel, y = valor, group = movie_title, colour = grupo)) + 
+    geom_point(alpha = .3, size = .5) + 
+    geom_line(alpha = .7) + 
+    facet_wrap(~ paste("Grupo ", grupo)) + 
+    labs(x = "", y = "z-score") +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+### 6.1 Nomeando Grupos
+
+Através dos gráficos anteriores podemos nomear os grupos e citar alguns filmes que fazem parte deles.
+
+* **Grupo 1:** Filmes que mais lucraram em cima do investimento na produção filme. Ex.: Avatar, Interstellar, Titanic e The Avengers.
+
+* **Grupo 2:** Filmes que cobriram seus investimentos em produção e obtiveram muitos likes no Facebook. Ex.: Batman v Superman: Dawn of Justice, The Hobbit: An Unexpected Journey, Pirates of the Caribbean: At World's End e The Hunger Games.
+
+* **Grupo 3:** Filmes que cobriram seus investimentos em produção e obtiveram muitos likes no Facebook. (Semelhante ao Grupo 2) Ex.: Spotlight, The Wizard of Oz, Deadpool e TRON: Legacy. 
+
+* **Grupo 4:** Filmes que investiram em produção mais do que lucraram com bilheteria. Ex.: Kung Fu Panda 3, Coach Carter, The Mask of Zorro e Insidious: Chapter 2. 
+
+* **Grupo 5:** Filmes que apesar de avaliações ruins no IMDb, obtiveram muitos likes no Facebook. Ex.: X-Men Origins: Wolverine, The Incredible Hulk, Rio 2, Men in Black e Mission: Impossible. 
+
+* **Grupo 6:** Filmes de longa duração que não tiveram boas avaliações no IMDb. Ex.: P.S. I Love You, Blade: Trinity, The Social Network e Star Trek: The Motion Picture.
+
+### 6.2 Diferenças, Semelhanças e conclusões
+
+Podemos observar a semelhança existente entre os grupos 2 e 3, as linhas são muito parecidas, no entanto, possuem intensidades diferentes, a mesma semelhança se aplica para os grupos 4, 5 e 6.
+
+Também é possível enchergar que o grupo que mais possui diferenças em relação aos outros é o grupo 1. Apesar de possuir linhas semelhantes ao grupo 1 e 2, este possui z-score maior do que todos.
+
+Contudo, se pudéssemos reagrupar esses dados em apenas dois grupos, poderíamos juntar os grupos 1, 2, 3 em um dos grupos (devido a semelhança) e os grupos 4, 5, 6 em outro grupo (devido a semelhança). Ambos os dois grupos criados iriam diferir consideravelmente entre eles.
+
+
+
+
+

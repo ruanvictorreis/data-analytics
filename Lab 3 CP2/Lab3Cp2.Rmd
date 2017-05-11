@@ -1,0 +1,309 @@
+---
+title: "Agrupamento"
+author: "Anon"
+date: "April 25, 2017"
+output:
+  html_document: default
+  html_notebook: default
+---
+###Introdução
+
+Os dados a seguir apresentam valores referentes a uma lista de filmes coletados por um usuário do kaggle. Os filmes estão disponíveis e pode ser acessados para mais detalhes em:  https://www.kaggle.com/deepmatrix/imdb-5000-movie-dataset. O dataset contém ao todo 5043 observações, com 28 variáveis. Decidimos nos concentrar apenas nos filmes do gênero de Animação dos USA, delimitando o dataset a apenas 163 observação e 5 variáveis. 
+
+Uma descrição das variáveis a seguir:
+
+- gross: valor total arrecadado com o filme em dólares
+- budget: Orçamento para a produção do filme em dólares
+- cast_total_facebook_likes: total de curtidas do elenco em geral no facebook
+- imdb_score: pontuação do imdb para o filme
+- num_voted_users: número de votos dos usuários que o filme recebeu.
+
+```
+
+library(dplyr, warn.conflicts = F)
+library(ggplot2)
+library(readr)
+library(knitr)
+library(stringr)
+library(tidyverse, warn.conflicts = F)
+library(rvest)
+library(plotly)
+library(cluster)
+library(ggdendro)
+theme_set(theme_light())
+#source("plota_solucoes_hclust.R")
+
+all_movies <- read_csv("~/Mestrado/FPCC2/R/movie_metadata.csv")
+
+movies = filter (all_movies, grepl("Animation", genres))
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+library(dplyr, warn.conflicts = F)
+library(ggplot2)
+library(readr)
+
+library(knitr)
+library(stringr)
+
+library(tidyverse, warn.conflicts = F)
+library(rvest)
+library(plotly)
+library(cluster)
+library(ggdendro)
+theme_set(theme_light())
+#source("plota_solucoes_hclust.R")
+
+
+
+all_movies = read_csv("dados/movie_metadata.csv")
+
+movies = filter (all_movies, grepl("Animation", genres))
+movies = movies%>%
+  filter (country == "USA")
+
+
+#newest_movies = movies%>%
+#mutate(diff_gross_budget = gross - budget)
+
+
+
+#View(all_movies)
+
+
+#movies[duplicated(movies$movie_title),]
+#c = duplicated(movies$movie_title)
+
+
+#duplicated(movies$movie_title)
+
+
+
+#duplicated(movies$movie_title)
+
+
+```
+
+
+###Tratamento dos dados
+
+Analisando as observações do dataset, uma vez delimitadas apenas aos filmes do gênero de animação, foi observado que:
+
+- alguns valores estavam faltando como gross ou budget
+- haviam observações repetidas no dataset. 
+- os valores de budget dos filmes produzidos fora dos USA não estão convertidos para dólar americano.
+
+Segundo reportado no site de origem, o motivo pela ausência de valores pode ter ocorrido porque o valor não foi encontrado na pagina do filme ou nao houve uma resposta da requisicao http em um curto periodo de tempo. Desta forma, as observações especificas foram desconsiderados da análise e optamos também pela remoção dos valores repetidos. Como a maioria do filmes era produzidos nos USA, decidimos nos concentrar apenas nestes, filtrando os dados. O dataset resultante possui 196 observações com 5 variáveis numéricas mais o título do filme.
+
+```
+movies = movies%>%
+  filter (country == "USA")
+#total = 182
+
+movies = movies%>%
+select(movie_title,num_voted_users, budget, gross, cast_total_facebook_likes, imdb_score)%>%
+filter(!is.na(gross))%>%
+filter(!is.na(budget))
+
+nrow(movies)
+#total = 165
+
+#encontra 2 filmes com o nome repetido, com valores de True and False
+row_to_keep = duplicated(movies$movie_title)
+
+#adiciona em movies apenas os nomes que nao forem repetidos
+movies = movies[!row_to_keep,]
+
+nrow(movies)
+# total 163
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+movies = movies%>%
+  select(movie_title,num_voted_users, budget, gross, cast_total_facebook_likes, imdb_score)%>%
+ filter(!is.na(gross))%>%
+  filter(!is.na(budget))
+
+#total = 165
+#nrow(movies)
+
+#encontra 2 filmes com o nome repetido, com valores de True and False
+row_to_keep = duplicated(movies$movie_title)
+#adiciona em movies apenas os nomes que nao forem repetidos
+movies = movies[!row_to_keep,]
+# total 163
+#nrow(movies)
+
+#View(movies)
+
+
+
+
+
+```
+
+###Critérios para escolha da quantidade de grupos
+
+Para escolher a quantidade de grupos utilizamos a) o dendrograma b) Dissimilaridade na junção. 
+
+#### Dendrograma
+
+Como pode ser observado no dendrograma abaixo, levando em consideração as cinco variáveis númericas mais o nome do filme apenas como forma de identificação, foram escolhidos 4 grupos. Poderíamos também ter traçado a linha em uma altura mais baixa de forma a agrupar mais, porém optamos por manter o número de grupos mais baixo para uma melhor compreensão acerca dos mesmo. Utilizamos o método "complete" uma vez que tende a produzir grupos mais compactos.
+
+```
+row.names(movies) = NULL
+agrupamento_h = movies %>% 
+    column_to_rownames("movie_title") %>% # hclust precisa dos rótulos em nomes de linha (ruim)
+    select(imdb_score) %>%
+    dist(method = "euclidean") %>% 
+    hclust(method = "complete")
+
+    ggdendrogram(agrupamento_h, rotate = T, size = 2) + 
+    geom_hline(yintercept =230000000, colour = "red")
+
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+#movie = as.data.frame(movies)
+
+
+
+row.names(movies) = NULL
+agrupamento_h = movies %>% 
+    column_to_rownames("movie_title") %>% # hclust precisa dos rótulos em nomes de linha (ruim)
+   select(num_voted_users, budget, gross, cast_total_facebook_likes, imdb_score)%>%
+    dist(method = "euclidean") %>% 
+    hclust(method = "complete")
+
+#ggdendrogram(agrupamento_h, rotate = F, size = 2) 
+
+ggdendrogram(agrupamento_h, rotate = T, size = 2) + 
+    geom_hline(yintercept =230000000, colour = "red")
+```
+
+####Dissimilaridade da junção
+
+Pela dissimilaridade da junção, percebemos que o ponto em que filmes com características muito diferents começam a ser agrupados, ou seja, as junções feitas possuem um disparidade maior, está em torno de 158 ou 159, 4 ou 5 de trás para frente, o ponto em que a linha começa a se inclinar de forma mais visível. Levando em coonsideração também o dendrograma, podemos considerar que os pontos que mais ocasionam uma inclinação na linha estao por volta de 159 ou 4 de trás para frente. Optamos então por 4 grupos para a análise.
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+data.frame(k = 1:NROW(agrupamento_h$height), 
+           height = agrupamento_h$height) %>% 
+    ggplot(aes(x = k, y = height)) + 
+    geom_line(colour = "grey") + 
+    geom_point() + 
+    labs(x = "Junções feitas (163 - x)", y = "Dissimilaridade na junção")
+
+```
+
+###Avaliação dos agrupamento encontrados
+
+A silhueta nos permite avaliar o quão perto cada ponto ou observação de um grupo está de outros pontos em grupos vizinhos, ou seja, o quão bem a observação foi agrupada. Ao observarmos a silhueta para os grupos encontrados, percebemos que foram razoavelmente bem, exceto pelo primeiro grupo com alguns pontos mal agrupados.
+
+```
+row.names(movies) = NULL
+dists = movies %>% 
+    column_to_rownames("movie_title") %>%
+    select( budget, gross, cast_total_facebook_likes, imdb_score) %>%
+    dist(method = "euclidean")
+
+agrupamento_h_md = dists %>% 
+    hclust(method = "ward.D")
+
+ggdendrogram(agrupamento_h_md, rotate = T)
+cores = RColorBrewer::brewer.pal(5, "Set3")
+plot(cluster::silhouette(cutree(agrupamento_h_md, k = 4), dists), col = cores, border = NA)
+```
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#filmes2 = agrupamento_h_md = movies 
+
+row.names(movies) = NULL
+dists = movies %>% 
+    column_to_rownames("movie_title") %>%
+   # mutate(`BOX OFFICE` = log10(`BOX OFFICE`)) %>% 
+   select( budget, gross, cast_total_facebook_likes, imdb_score) %>%
+  #  mutate_all(funs(scale)) %>% 
+    dist(method = "euclidean")
+
+agrupamento_h_md = dists %>% 
+    hclust(method = "complete")
+
+#ggdendrogram(agrupamento_h_md, rotate = T)
+cores = RColorBrewer::brewer.pal(4, "Set3")
+plot(cluster::silhouette(cutree(agrupamento_h_md, k = 4), dists), col = cores, border = NA)
+```
+
+``
+
+Por este gráfico, percebemos que a relação do orçamento e baudget parece razoavel, não se concentram muito a esquerda para justificar a necessidade de utilizar o log, o que significa modificar a ordem de grandeza. Decidimos, portanto, continuar mantendo a escala original. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+p = movies %>% 
+    ggplot(aes(x = budget, y = gross, label = movie_title)) + 
+    geom_point() 
+p
+#ggplotly(p)
+```
+
+###Analise dos grupos e Conclusão
+
+Nos gráficos abaixo, podemos analizar diferentes características dos grupos. O primeiro gráfico nos permite enxergar como os dados se agrupam a medida que um novo grupo é adicionado. O gráfico de linhas paralelas nos permite visualizar melhor como os dados se comportam. Poderíamos dizer, pelos dados visualmente, acerca dos grupos que:
+
+- primeiro: filmes com arrecadação um pouco acima da media e que foram muito bem votados. A meioria dos valores parecem estar acima da média, recebendo muitos votos 
+- segundo: filmes que deram muito lucro e que foram bem votados apesar dos atores não serem tao bem curtidos.
+- terceiro: filmes que deram um certo prejuizo e receberam pontuação baixa do imdb, apesar dos atores serem bem curtidos, 
+- quarto: filmes que não gastaram muito e nao deram prejuizo. Alguns destes filmes com u elenco bem curtido no Facebook.
+
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+#movies = movies%>%
+#  select(num_voted_users, budget, gross, cast_total_facebook_likes, imdb_score)
+  
+atribuicoes = tibble(k = 1:4) %>% 
+    group_by(k) %>% 
+    do(cbind(movies, 
+             grupo = as.character(cutree(agrupamento_h_md, .$k)))) 
+
+atribuicoes_long = atribuicoes %>% 
+    mutate(gross = scale(gross), 
+           budget = scale(budget), 
+           num_voted_users = scale(num_voted_users), 
+           imdb_score = scale(imdb_score), 
+           cast_total_facebook_likes= scale(cast_total_facebook_likes)) %>% 
+    gather(key = "variavel", value = "valor",  -movie_title, -grupo, -k) 
+
+atribuicoes_long %>% 
+    ggplot(aes(x = variavel, y = valor, group = grupo, colour = grupo)) + 
+    geom_point(alpha = .4, position = position_dodge(width = .5)) + 
+    facet_wrap(~ paste(k, " grupos")) + 
+    labs(x = "", y = "z-score")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+#atribuicoes_long %>% 
+   # filter(k == 4) %>%
+ #   ggplot(aes(x = variavel, 
+ #              y = valor, 
+ #              colour = grupo)) + 
+ #   geom_boxplot() + 
+ #   geom_point(alpha = .4, position = position_jitter(width = .1)) + 
+ #   facet_wrap(~ grupo) + 
+  #   labs(x = "", y = "z-score")+
+ # theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+atribuicoes_long %>% 
+    filter(k == 4) %>%
+    ggplot(aes(x = variavel, y = valor, group = movie_title, colour = grupo)) + 
+    geom_point(alpha = .3, size = .5) + 
+    geom_line(alpha = .7) + 
+    facet_wrap(~ paste("Grupo ", grupo)) + 
+    labs(x = "", y = "z-score")+
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+

@@ -1,0 +1,175 @@
+---
+title: "Checkpoint 4 - Relatório Final"
+output: html_document
+---
+
+## Introdução
+Esta análise é baseada nos dados da câmara dos deputados disponibilizados pelo portal de transparência. Todos os dados podem ser consultados a partir do site https://github.com/nazareno/dados-da-camara-federal, onde também é possível obter esclarecimentos sobre as variáveis que compõe as tabelas.
+
+Por meio desta pesquisa queremos discutir e encontrar respostas para as seguintes perguntas:
+
+- Quais fornecedores recebem maior total em dinheiro referente a serviços prestados aos parlamentares?
+
+- Quais fornecedores recebem maior número de solicitações de serviços pelos deputados?
+
+- Dado que os maiores gastos dos deputados são com divulgação de atividades parlamentares e passagens aéreas, quais são os partidos políticos que gastam mais com essas categorias de despesa?
+
+- Como é a distribuição dos gastos com divulgação de atividade parlamentar e passagens aéreas para cada partido político?
+
+## Sobre os dados
+Para responder às perguntas de interesse é necessário entender quais dados possuímos e o que eles significam. Inicialmente, consultamos todos os dados relacionados às despesas dos deputados no período do início de 2015 até os dias atuais. No entanto, a tabela de despesas contém dados que são desnecessários para o objetivo da análise. Portanto, segue uma lista dos dados que estamos realmente interessados e o que eles significam:
+
+- *Sigla do Partido (sgPartido)*: O seu conteúdo representa a sigla de um partido.
+
+- *Descrição da Subcota (txtDescricao)*: O seu conteúdo é a descrição do Tipo de Despesa relativo à despesa em questão.
+
+- *Fornecedor (txtFornecedor)*: O conteúdo deste dado representa o nome do fornecedor do produto ou serviço presente no documento fiscal
+
+- *CNPJ/CPF (txtCNPJCPF)*: O conteúdo deste dado representa o CNPJ ou o CPF do emitente do documento fiscal.
+
+## Bibliotecas, leitura dos dados e formatação
+
+Inicialmente, precisamos importar as bibliotecas readr, dplyr e ggplot2 que serão úteis durante a análise. Os dados são carregados na variável 'gastos_parlamentares' que será utilizada posteriormente. Também será necessário a função 'formata_label' para formatar os números que serão exibidos nos gráficos. O código abaixo é responsável por fornecer esses recursos. 
+
+```{r, message=FALSE, warning=FALSE}
+
+library(readr)
+library(dplyr, warn.conflicts = F)
+library(ggplot2)
+
+gastos_parlamentares = read_csv("dados/gastos-cota_atividade_parlamentar.csv")
+
+formata_label = function(l){
+  # existem funções para formatar com , sendo milhar e . sendo decimal (scales::comma)
+  # mas em pt_br é o contrário. essa função serve para isso
+  format(l, big.mark = ".", scientific = FALSE, trim = TRUE, decimal.mark = ",")
+}
+
+```
+
+## Tratamento e limpeza de dados
+
+Os dados disponibilizados apresentam alguns problemas que precisam ser corrigidos. Inicialmente, é necessário remover as despesas que não possuem CPF e CNPJ associados. Outro problema é a escrita irregular do nome do fornecedor, ou seja, o mesmo está com nomes diferentes em alguns registros. Para corrigir tais problemas usamos o código abaixo que remove despesas sem CPF/CNPJ e padronizar corretamente os nomes que descrevem um fornecedor.
+
+```{r message=FALSE, warning=FALSE}
+
+fornecedores_corrigidos = gastos_parlamentares %>%
+  filter(!is.na(txtCNPJCPF)) %>% 
+  group_by(txtCNPJCPF) %>%
+  mutate(txtFornecedor = toupper(first(txtFornecedor))) %>%
+  arrange(txtCNPJCPF)
+
+```
+
+Deve ser garantido que todas as despesas recuperadas estejam associadas a um partido político para que possamos relacioná-las. É possível notar também que temos as categorias "PASSAGENS AÉREAS" e "Emissão Bilhete Aéreo" que são similares, então, podemos unificar as duas. Outros ajustes foram realizados para diminuir o tamanho do domínio e otimizar o processamento.
+
+```{r message=FALSE, warning=FALSE}
+
+partidos_corrigidos = gastos_parlamentares %>% 
+  filter(!is.na(sgPartido)) %>%
+  mutate(txtDescricao = ifelse (
+    txtDescricao == "Emissão Bilhete Aéreo", 
+    "PASSAGENS AÉREAS", txtDescricao)) %>% 
+  filter(txtDescricao == "PASSAGENS AÉREAS" | txtDescricao == "DIVULGAÇÃO DA ATIVIDADE PARLAMENTAR.")
+names(partidos_corrigidos)[names(partidos_corrigidos) == "txtDescricao"] <- "categoria"
+
+```
+
+## Resultados e análise
+
+Agora, temos os dados carregados e consistentes. Podemos responder as perguntas de interesse.
+
+### Quais fornecedores recebem maior total em dinheiro referente a serviços prestados aos parlamentares?
+
+Para responder tal pergunta, devemos agrupar os dados pelo CPF/CNPJ e pelo nome dos fornecedores, somar os valores líquidos das despesas para cada grupo de registros e ordenar os resultados pelo total recebido em ordem decrescente. No entanto, são muitos fornecedores, então, restringirmos os resultados para os 10 (dez) primeiros registros. Foi utilizado um gráfico em barra para expressar os resultados dessa análise. 
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5}
+
+p = fornecedores_corrigidos %>% 
+  group_by(txtCNPJCPF, txtFornecedor) %>%
+  summarise(total = sum(vlrLiquido)) %>%
+  arrange(-total) %>%
+  head(n = 10) %>%
+  ggplot(aes(x = reorder(txtFornecedor, total), y = total)) +
+  geom_bar(stat = "identity") + 
+  scale_y_continuous(labels = formata_label) + 
+  labs(x = "Fornecedor", y = "Total de recebido (R$)") +
+  coord_flip()
+
+print(p)
+ggsave("Fig1-1.pdf", width = 9, height = 6)
+
+```
+
+Como pode ser observado no gráfico, os fornecedores que mais recebem dinheiro dos parlamentares são as quatro principais companhias aéreas que operam no Brasil (TAM, GOL, Azul e Avianca). Em seguida, podemos destacar a empresa de telefonia "Telefônica Brasil S.A", mais conhecida como "Vivo". Um fato curioso é que o sexto colocado da lista é o advogado "Douglas Cunha da Silva", que é alvo de desconfiança pela mídia, já que o mesmo faturou 1,8 milhão da câmara só em 2016 com serviços de consultoria. 
+
+*Fonte:* http://exame.abril.com.br/brasil/sozinho-este-advogado-faturou-r-1-8-milhao-da-camara/
+
+### Quais fornecedores recebem maior número de solicitações de serviços pelos deputados?
+
+Dado a questão anterior onde foi obtido resultados sobre os fornecedores que mais recebem dinheiro dos parlamentares, surgiu a curiosidade em saber se tais fornecedores também são os mais solicitados para prestar serviços para a câmara. Para tal questão, também agrupamos os dados pelo CPF/CNPJ e pelo nome dos fornecedores, porém, não queremos saber o valor total das despesas, queremos saber a quantidade de despesas para cada grupo de registros. Utilizamos um gráfico em pontos para dar uma ideia da diferença/distância existente entre as quantidades de solicitações de serviços comparando os fornecedores.
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5}
+
+fornecedores_corrigidos %>% 
+  group_by(txtCNPJCPF, txtFornecedor) %>%
+  summarise(quantidade = n()) %>%
+  arrange(-quantidade) %>%
+  head(n = 10) %>%
+  ggplot(aes(x = reorder(txtFornecedor, quantidade), y = quantidade)) +
+  geom_point() +
+  scale_y_continuous(labels = formata_label) + 
+  labs(x = "Fornecedor", y = "Quantidade de serviços prestados") +
+  coord_flip()
+
+```
+
+Segundo o gráfico apresentado, os fornecedores que mais recebem solicitações de serviços são também as principais companhias aéreas que operam no Brasil, no entanto, houve uma pequena alteração na ordem entre as companhias "Avianca" e "Azul". Em seguida, na quinta posição, podemos ver a empresa "Telefônica Brasil SA" (Vivo) que se manteve inalterável em relação ao gráfico anterior. Da sexta posição em diante, todos os fornecedores mudaram em relação a pergunta anterior.
+
+### Dado que os maiores gastos dos deputados são com divulgação de atividades parlamentares e passagens aéreas, quais são os partidos políticos que gastam mais com essas categorias de despesa?
+
+Esta pergunta tem como objetivo conhecer quais são os partidos políticos que mais gastam dinheiro da cota parlamentar com despesas das categorias "Divulgação de atividades parlamentares" e "Passagens aéreas". Para tal análise, precisamos agrupar as despesas por partido e categoria, filtrar os dados apenas para as categorias desejadas (isso já foi feito anteriormente em "Tratamento e limpeza dos dados"), somar os valores líquidos da despesa para cada grupo de registros e ordenar os valores totais em ordem decrescente.
+
+```{r message=FALSE, warning=FALSE, fig.width = 10, fig.height = 5}
+
+partidos_corrigidos %>%
+  group_by(sgPartido, categoria) %>%
+  summarise(total = sum(vlrLiquido)) %>%
+  arrange(-total) %>%
+  ggplot(aes(x = reorder(sgPartido, total), y = total)) +
+  geom_bar(stat = "identity") + 
+  scale_y_continuous(labels = formata_label) + 
+  labs(x = "Partido", y = "Total dos gastos (R$)") +
+  coord_flip()
+
+```
+
+É possível visualizar através do gráfico que os partidos políticos que mais gastam dinheiro com divulgação da atividade parlamentar e passagens aéreas são PMDB, PT, PP, PSDB e PR. Entre os partidos existe uma diferença considerável entre os valores totais gastos nessas categorias.
+
+### Como é a distribuição dos gastos com divulgação de atividade parlamentar e  passagens aéreas para cada partido político?
+
+Dado a resposta da análise anterior, surgiu a curiosidade em saber como é a distribuição dos gastos dessas categorias por partidos, ou seja, o quanto desse valor é gasto com divulgação de atividade parlamentar e o quanto é gasto com passagens aéreas. Para obter essa informação, reutilizamos o código R da questão anterior e adicionamos apenas uma nova perspectiva na visualização dos dados.
+
+```{r message=FALSE, warning=FALSE, fig.width = 12, fig.height = 6}
+
+partidos_corrigidos %>%
+  group_by(sgPartido, categoria) %>%
+  summarise(total = sum(vlrLiquido)) %>%
+  arrange(-total) %>%
+  ggplot(aes(x = reorder(sgPartido, total), y = total, fill = categoria)) +
+  geom_bar(stat = "identity") + 
+  scale_y_continuous(labels = formata_label) + 
+  labs(x = "Partido", y = "Total dos gastos (R$)") +
+  coord_flip()
+
+```
+
+Existe um equilíbrio entre os gastos dessas categorias. Alguns partidos gastam mais com passagens aéreas, outros gastam mais com divulgação de atividades parlamentares. No entanto, em análises anteriores (checkpoint 2), foi constatado que os gastos divulgação de atividades parlamentares é realmente superior, porém muito próximo do gasto com passagens aéreas. Isso explica o equilíbrio quando observamos estes gastos por partidos.
+
+## Conclusão
+
+Este trabalho analisou os gastos dos partidos políticos em determinadas categorias de despesa e o recebimento da cota por fornecedores que prestam serviços aos deputados. Foi possível concluir que as companhias aéreas são quem mais recebem dinheiro das cotas parlamentares, em destaque estão as empresas: TAM, GOL, Azul e Avianca. Além disso, empresas que trabalham com transporte e comunicação são as mais solicitadas para realizar serviços para câmara, por exemplo, companhias aéreas, empresas de telefonia, cooperativas de táxi e empresas de locação de carros.
+
+Entre os partidos políticos que mais gastam dinheiro nas principais categorias de despesas, destacam-se o PMDB, PT, PP, PSDB e PR. Existe um equilíbrio na distribuição dos gastos entre as categorias "Divulgação da atividade parlamentar" e "Passagens aéreas", porém, em outras análises foi constatado que os deputados gastam mais em "Divulgação da atividade parlamentar".
+<br/>
+<br/>

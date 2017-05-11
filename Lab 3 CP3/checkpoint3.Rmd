@@ -1,0 +1,172 @@
+---
+title: "Checkpoint 3"
+author: "Ruan Victor Bertoldo Reis de Amorim"
+date: "9 de maio de 2017"
+output: html_document
+---
+
+## 1. Introdução
+
+* **Nível:** Conceito da CAPES para um determinado programa de pós-graduação.
+
+* **periodicos_A1:** Número de periódicos de qualis A1 publicados pelo PPG.
+
+* **periodicos_A2:** Número de periódicos de qualis A2 publicados pelo PPG.
+
+* **per_comaluno_A1:** Número de alunos que são autores ou co-autores de periódicos de qualis A1.
+
+* **per_comaluno_A2:** Número de alunos que são autores ou co-autores de periódicos de qualis A2.
+
+```{r, message=FALSE, warning=FALSE}
+require(GGally, quietly = TRUE)
+require(reshape2, quietly = TRUE)
+require(tidyverse, quietly = TRUE, warn.conflicts = FALSE)
+library(ggfortify)
+library(cluster)
+library(ggdendro)
+library(broom)
+
+dados_capes = read_csv("dados/capes-cacc.csv")
+
+formata_label = function(l){
+  # existem funções para formatar com , sendo milhar e . sendo decimal (scales::comma)
+  # mas em pt_br é o contrário. essa função serve para isso
+  format(l, big.mark = ".", scientific = FALSE, trim = TRUE, decimal.mark = ",")
+}
+
+```
+
+## 2. Descrição das variáveis
+
+### 2.1 Nível
+
+### 2.2 periodicos_A1
+
+### 2.3 periodicos_A2
+
+### 2.4 per_comaluno_A1
+
+### 2.5 per_comaluno_A2
+
+## 3. Tratamento dos dados
+
+```{r}
+dados_capes = dados_capes %>% 
+  select(Sigla, `Nível`, periodicos_A1, periodicos_A2, per_comaluno_A1, per_comaluno_A2)
+
+dados_capes = dados_capes %>%
+  filter(complete.cases(dados_capes))
+
+dados_capes2 = dados_capes
+```
+
+## 4. Critérios de Escolha para o Número de Grupos
+
+### 4.1 Dendrograma
+
+### 4.2 Dissimilaridade da Junção
+
+## 5. Avaliação do Agrupamento
+
+### 5.1 Silhoueta
+
+## 6. Agrupamentos
+
+### 6.1 Agrupamento com hclust
+
+### 6.2 Agrupamento com Kmeans
+
+```{r, message=FALSE, warning=FALSE}
+
+n_clusters = 5
+
+dados_capes.scaled = select(dados_capes, -Sigla) %>% 
+  mutate_each(funs(scale))
+
+row.names(dados_capes.scaled)  = dados_capes$Sigla
+
+toclust = dados_capes.scaled %>% 
+   rownames_to_column(var = "universidade") %>% 
+   select(1:6) 
+
+dists = toclust %>% 
+    select(-universidade) %>% 
+    dist()
+
+km = toclust %>% 
+    select(-universidade) %>% 
+    kmeans(centers = n_clusters, nstart = 20)
+
+km %>% 
+  augment(toclust) %>% 
+  gather(key = "variáveis", value = "z-score", -universidade,  -.cluster) %>% 
+  ggplot(aes(x = `variáveis`, y = `z-score`, group = universidade, colour = .cluster)) + 
+  geom_point(alpha = 0.2) + 
+  geom_line(alpha = .5) + 
+  facet_wrap(~ .cluster) +
+  theme(axis.text.x = element_text(angle = 75, hjust = 1))
+
+autoplot(km, data = dados_capes.scaled, label = TRUE)
+plot(silhouette(km$cluster, dists), col = RColorBrewer::brewer.pal(n_clusters, "Set2"))
+
+dados_capes.scaled$kmcluster = km$cluster
+
+table(km$cluster)
+
+km %>% 
+    augment(toclust) %>% 
+    select(universidade, .cluster) %>% 
+    filter(.cluster == 1)
+
+```
+
+## PCA
+
+```{r, message=FALSE, warning=FALSE}
+row.names(dados_capes) = dados_capes$Sigla
+
+pr.out = prcomp(select(dados_capes, -Sigla), scale = TRUE) 
+
+kable(pr.out$rotation)
+biplot(pr.out, scale = 0)
+
+autoplot(pr.out, label = TRUE, label.size = 3, shape = FALSE)
+
+autoplot(pr.out, label = TRUE, label.size = 3, shape = FALSE, 
+         loadings = TRUE, loadings.colour = 'blue',
+         loadings.label = TRUE, loadings.label.size = 3)
+
+# Porcentagem da variância explicada: 
+plot_pve <- function(prout){
+  pr.var <- pr.out$sdev^2
+  pve <- pr.var / sum(pr.var)
+  df = data.frame(x = 1:NROW(pve), y = cumsum(pve))
+  ggplot(df, aes(x = x, y = y)) + 
+    geom_point(size = 3) + 
+    geom_line() + 
+    labs(x='Principal Component', y = 'Cumulative Proportion of Variance Explained')
+}
+
+plot_pve(pr.out)
+```
+
+## t-SNE
+
+```{r}
+require(Rtsne)
+
+tsne.out = Rtsne(dados_capes2, 
+                 verbose = TRUE,
+                 perplexity = 20)
+
+df = as.data.frame(tsne.out$Y)
+df$Sigla = dados_capes2$Sigla
+
+ggplot(df, aes(x = V1, y = V2, label = Sigla)) + 
+  geom_point(alpha = 0.8, size = 3, color = "tomato") 
+
+ggplot(df, aes(x = V1, y = V2, label = Sigla)) + 
+  geom_point(alpha = 0.2, size = 3, color = "tomato") + 
+  geom_text(alpha = .7, size = 4, hjust = -.2)
+
+```

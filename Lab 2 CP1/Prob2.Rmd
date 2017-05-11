@@ -1,0 +1,67 @@
+---
+title: "Prob2"
+author: "Ruan Victor Bertoldo Reis de Amorim"
+date: "24 de abril de 2017"
+output: html_document
+---
+
+```{r, eval=FALSE, message=FALSE, warning=FALSE, include=FALSE}
+
+library(readr)
+library(dplyr, warn.conflicts = F)
+library(ggplot2)
+library(lubridate)
+
+theme_set(theme_bw())
+
+formata_label = function(l){
+  # existem funções para formatar com , sendo milhar e . sendo decimal (scales::comma)
+  # mas em pt_br é o contrário. essa função serve para isso
+  format(l, big.mark = ".", scientific = FALSE, trim = TRUE, decimal.mark = ",")
+}
+
+gastos_parlamentares = read_csv("dados/gastos-cota_atividade_parlamentar.csv") %>%
+  select(sgPartido, txtCNPJCPF,  txtFornecedor, vlrLiquido, datEmissao)
+
+gastos_parlamentares = gastos_parlamentares %>%
+  filter(complete.cases(gastos_parlamentares))
+
+```
+
+```{r fig.width = 6, fig.height = 4}
+
+partidos_populares = c("PMDB", "PT", "PSDB", "PP")
+
+cnpj_principais_fornecedoes = gastos_parlamentares %>% 
+  group_by(txtCNPJCPF) %>%
+  summarise(total = sum(vlrLiquido)) %>%
+  arrange(-total) %>%
+  head(n = 4) %>% select(txtCNPJCPF)
+
+fornecedores_partidos = gastos_parlamentares %>%
+  filter(sgPartido %in% partidos_populares,
+         txtCNPJCPF %in% cnpj_principais_fornecedoes$txtCNPJCPF) %>%
+  group_by(txtCNPJCPF) %>%
+  mutate(txtFornecedor = toupper(first(txtFornecedor))) %>%
+  mutate(datEmissao = lubridate::year(datEmissao))
+
+graphic_data = fornecedores_partidos %>%
+  filter(vlrLiquido > 0)
+
+graphic_data = graphic_data %>%
+ mutate(txtFornecedor = ifelse (txtFornecedor == "CIA AÉREA - AZUL", "AZUL", txtFornecedor)) %>%
+ mutate(txtFornecedor = ifelse (txtFornecedor == "CIA AÉREA - GOL", "GOL", txtFornecedor)) %>%
+ mutate(txtFornecedor = ifelse (txtFornecedor == "CIA AÉREA - TAM", "TAM", txtFornecedor))  
+
+p = graphic_data %>% 
+  ggplot(aes(x = substr(as.character(datEmissao), 3, 4), y = vlrLiquido, colour = sgPartido)) + 
+  geom_point(size = 1, alpha = .7)  +
+  scale_y_continuous(labels = formata_label) + 
+  labs(x = "Ano", y = "Total de recebido (R$)") +
+  facet_grid(sgPartido ~ txtFornecedor)
+
+print(p)
+ggsave("Fig2-2.pdf", width = 6, height = 4)
+
+```
+
