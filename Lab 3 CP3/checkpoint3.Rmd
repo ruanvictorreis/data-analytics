@@ -25,6 +25,7 @@ library(ggfortify)
 library(cluster)
 library(ggdendro)
 library(broom)
+library(knitr)
 
 dados_capes = read_csv("dados/capes-cacc.csv")
 
@@ -59,6 +60,17 @@ dados_capes = dados_capes %>%
 
 dados_capes2 = dados_capes
 ```
+
+
+```{r}
+dados_capes %>% 
+    gather(key = "variavel", value = "valor", -Sigla) %>% 
+    ggplot(aes(x = valor)) + 
+    geom_histogram(fill = "lightyellow", color = "black", bins = 20) + 
+    facet_grid(. ~ variavel, scales = "free_x")
+```
+
+
 
 ## 4. Critérios de Escolha para o Número de Grupos
 
@@ -122,20 +134,19 @@ km %>%
 
 ## PCA
 
+Análise de componentes principais (PCA) é uma técnica usada para enfatizar a variação e trazer padrões fortes em um conjunto de dados. É freqüentemente usado para tornar os dados fáceis de explorar e visualizar. Inicialmente, iremos executar o PCA em nossos dados com scale = TRUE para que sejam feitas as normalizações, evitando o impacto de discrepâncias dos valores nas variâncias. Em seguida, encontraremos e veremos os componentes e sua relação com as variáveis originais.
+
 ```{r, message=FALSE, warning=FALSE}
 row.names(dados_capes) = dados_capes$Sigla
 
 pr.out = prcomp(select(dados_capes, -Sigla), scale = TRUE) 
 
 kable(pr.out$rotation)
-biplot(pr.out, scale = 0)
+```
 
-autoplot(pr.out, label = TRUE, label.size = 3, shape = FALSE)
+Utilizamos a função plot_pve para analisarmos quanta variância cada PC captura, observamos que os dois primeiros componentes explicam cerca de 95% da variância.
 
-autoplot(pr.out, label = TRUE, label.size = 3, shape = FALSE, 
-         loadings = TRUE, loadings.colour = 'blue',
-         loadings.label = TRUE, loadings.label.size = 3)
-
+```{r}
 # Porcentagem da variância explicada: 
 plot_pve <- function(prout){
   pr.var <- pr.out$sdev^2
@@ -150,14 +161,30 @@ plot_pve <- function(prout){
 plot_pve(pr.out)
 ```
 
+O gráficos a seguir mostram a estrutura dos grupos formados pela execução do PCA. Podemos percerber que algumas universidades se encontram aglomeradas em algumas regiões, outras já se mantém muito isoladas como a USP/SC, UFRGS, UFPE e UFRJ.
+
+```{r, message=FALSE, warning=FALSE}
+autoplot(pr.out, label = TRUE, label.size = 3, shape = FALSE)
+```
+
+Quando aplicamos os vetores de direcionamento com suas respectivas variáveis, conseguimos entender os comportamentos existentes nos dados. Podemos observar que as universidades que mais publicam em periódicos com qualis A1 e A2, e que possuem maior número de alunos entre os autores, são tambem as universidades que possuem melhor conceito (nível) da CAPES no seu programa de pós-graduação. No entanto, esse não é o único critério para definição do conceito, por exemplo, a USP/SC possui 175 publicações em periódicos de qualis A1 e 84 de qualis A2, porém, seu conceito é 6, que é menor que o conceito da UFRJ (conceito 7) que posssui 48 periódicos de qualis A1 e 89 de qualis A2. As universidades que se mantiveram mais aglomeradas são as que possuem menor quantidade de periódicos A1 e A2, consequentemente, também são as que possuem menor conceito pela CAPES. Existe uma co-relação forte entre os números de publicações em periódicos e o número de alunos que tiveram seu nome entre os autores nesses periódicos, no entanto, tal comportamento já era obviamente esperado.
+
+```{r, message=FALSE, warning=FALSE}
+biplot(pr.out, scale = 0)
+
+autoplot(pr.out, label = TRUE, label.size = 3, shape = FALSE, 
+         loadings = TRUE, loadings.colour = 'blue',
+         loadings.label = TRUE, loadings.label.size = 3)
+```
+
 ## t-SNE
 
-```{r}
+```{r, message=FALSE, warning=FALSE}
 require(Rtsne)
 
 tsne.out = Rtsne(dados_capes2, 
                  verbose = TRUE,
-                 perplexity = 20)
+                 perplexity = 5)
 
 df = as.data.frame(tsne.out$Y)
 df$Sigla = dados_capes2$Sigla
