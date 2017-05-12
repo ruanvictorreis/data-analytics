@@ -161,7 +161,7 @@ plot_pve <- function(prout){
 plot_pve(pr.out)
 ```
 
-O gráficos a seguir mostram a estrutura dos grupos formados pela execução do PCA. Podemos percerber que algumas universidades se encontram aglomeradas em algumas regiões, outras já se mantém muito isoladas como a USP/SC, UFRGS, UFPE e UFRJ.
+O gráfico a seguir mostra a estrutura dos grupos formados pela execução do PCA. Podemos percerber que algumas universidades se encontram aglomeradas em algumas regiões, outras já se mantém muito isoladas como a USP/SC, UFRGS, UFPE e UFRJ.
 
 ```{r, message=FALSE, warning=FALSE}
 autoplot(pr.out, label = TRUE, label.size = 3, shape = FALSE)
@@ -178,6 +178,8 @@ autoplot(pr.out, label = TRUE, label.size = 3, shape = FALSE,
 ```
 
 ## t-SNE
+
+Quando executamos análises através do t-SNE, podemos observar o surgimento de cinco grupos bem definidos, o mesmo número de componentes encontrado na análise com PCA. Os componentes destes grupos e também a sua estrutura podem ser vistas nos gráficos seguintes.
 
 ```{r, message=FALSE, warning=FALSE}
 require(Rtsne)
