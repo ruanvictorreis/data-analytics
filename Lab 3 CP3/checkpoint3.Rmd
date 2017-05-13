@@ -187,18 +187,7 @@ Diante dos gráficos resultantes do agrupamento podemos nomear os grupos e citar
 A silhueta nos permite avaliar o quão cada ponto ou grupo está perto de outros pontos e grupos vizinhos, ou seja, o quão bem os dados foram agrupados. Quando observarmos a silhueta para os grupos encontrados, percebemos que foram muito bem, exceto pelo último grupo com alguns pontos mal agrupados.
 
 ```{r, message=FALSE, warning=FALSE}
-
 plot(silhouette(km$cluster, dists), col = RColorBrewer::brewer.pal(n_clusters, "Set2"))
-
-dados_capes.scaled$kmcluster = km$cluster
-
-table(km$cluster)
-
-km %>% 
-    augment(toclust) %>% 
-    select(universidade, .cluster) %>% 
-    filter(.cluster == 1)
-
 ```
 
 ## 5. PCA
