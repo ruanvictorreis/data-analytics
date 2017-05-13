@@ -1,11 +1,15 @@
 ---
 title: "Checkpoint 3"
-author: "Ruan Victor Bertoldo Reis de Amorim"
+author: "-"
 date: "9 de maio de 2017"
 output: html_document
 ---
 
 ## 1. Introdução
+
+Este trabalho tem por objetivo descrever e explorar a estrutura de determinados grupos de universidades que oferecem programas de pós-graduação em Ciência da Computação no Brasil. Utilizaremos dados quantitativos que a CAPES utiliza na avaliação segundo o Comitê de Avaliação. Os dados foram coletados da Plataforma Sucupira, e incluem quantificações da produção de artigos, dissertações e teses nos últimos 4 anos para os diferentes PPGs: 
+
+Estamos interessados em analisar as seguintes variáveis para caracterizar e explorar os grupos de universidades que oferecem programa de pós-graduação em Ciência da Computação:
 
 * **Nível:** Conceito da CAPES para um determinado programa de pós-graduação.
 
@@ -41,15 +45,78 @@ formata_label = function(l){
 
 ### 2.1 Nível
 
+De acordo com os gráficos, as universidade em maior parte possuem conceito 3 e 4, poucas universidade possuem conceito maior ou igual a 6.
+
+```{r, message=FALSE, warning=FALSE}
+dados_capes %>% 
+    ggplot(aes(y = `Nível`, x = "Universidades")) + 
+    geom_boxplot(width = .3)
+
+dados_capes %>% 
+    ggplot(aes(x = `Nível`)) + 
+    geom_histogram(bins = 30)
+```
+
+
 ### 2.2 periodicos_A1
+
+De acordo com os gráficos, 15 universidades nunca publicaram um periódico em conferência de qualis A1, no entanto, a maior parte delas publicou de 1 a 25 vezes. Existem também algunas universidade que publicaram muito, ou seja, mais de 50 vezes. 
+
+```{r, message=FALSE, warning=FALSE}
+dados_capes %>% 
+    ggplot(aes(y = periodicos_A1, x = "Universidades")) + 
+    geom_boxplot(width = .3)
+
+dados_capes %>% 
+    ggplot(aes(x = periodicos_A1)) + 
+    geom_histogram(bins = 30)
+```
 
 ### 2.3 periodicos_A2
 
+De acordo com os gráficos, 7 universidades nunca publicaram um periódico em conferência de qualis A2, no entanto, a maior parte delas publicou de 1 a 25 vezes. Existem também algunas universidade que publicaram muito, ou seja, mais de 50 vezes, porém nenhuma publicou mais de 100 vezes. 
+
+```{r, message=FALSE, warning=FALSE}
+dados_capes %>% 
+    ggplot(aes(y = periodicos_A2, x = "Universidades")) + 
+    geom_boxplot(width = .3)
+
+dados_capes %>% 
+    ggplot(aes(x = periodicos_A2)) + 
+    geom_histogram(bins = 30)
+```
+
 ### 2.4 per_comaluno_A1
+
+De acordo com os gráficos, a maioria das universidades não possuem alunos que são autores ou co-autores de periódicos de qualis A1. No entanto, cerca de 22 universidades publicaram com alunos de 1 a 12 periódicos. Poucas universidades publicam com alunos mais de 14 vezes. 
+
+```{r, message=FALSE, warning=FALSE}
+dados_capes %>% 
+    ggplot(aes(y = per_comaluno_A1, x = "Universidades")) + 
+    geom_boxplot(width = .3)
+
+dados_capes %>% 
+    ggplot(aes(x = per_comaluno_A1)) + 
+    geom_histogram(bins = 30)
+```
 
 ### 2.5 per_comaluno_A2
 
+De acordo com os gráficos, a 16 universidades não possuem alunos que são autores ou co-autores de periódicos de qualis A2. No entanto, cerca de 38 universidades publicaram com alunos de 1 a 10 periódicos. Poucas universidades publicam com alunos mais de 10 vezes.
+
+```{r, message=FALSE, warning=FALSE}
+dados_capes %>% 
+    ggplot(aes(y = per_comaluno_A2, x = "Universidades")) + 
+    geom_boxplot(width = .3)
+
+dados_capes %>% 
+    ggplot(aes(x = per_comaluno_A2)) + 
+    geom_histogram(bins = 30)
+```
+
 ## 3. Tratamento dos dados
+
+Em nossos dados existiam algumas universidades com valores faltantes para as variáveis de interesse. Portanto, adotamos a medida de retirar essas universidades do nosso conjunto de observações.
 
 ```{r}
 dados_capes = dados_capes %>% 
@@ -61,35 +128,13 @@ dados_capes = dados_capes %>%
 dados_capes2 = dados_capes
 ```
 
+## 4. Agrupamento (kmeans)
 
-```{r}
-dados_capes %>% 
-    gather(key = "variavel", value = "valor", -Sigla) %>% 
-    ggplot(aes(x = valor)) + 
-    geom_histogram(fill = "lightyellow", color = "black", bins = 20) + 
-    facet_grid(. ~ variavel, scales = "free_x")
-```
+Com intuito de identificar características, diferenças e semelhanças entre os grupos, utilizamos os seguintes gráficos para obter uma visão geral sobre o agrupamento realizado. 
 
-
-
-## 4. Critérios de Escolha para o Número de Grupos
-
-### 4.1 Dendrograma
-
-### 4.2 Dissimilaridade da Junção
-
-## 5. Avaliação do Agrupamento
-
-### 5.1 Silhoueta
-
-## 6. Agrupamentos
-
-### 6.1 Agrupamento com hclust
-
-### 6.2 Agrupamento com Kmeans
+Usaremos o número de clusters = 5.
 
 ```{r, message=FALSE, warning=FALSE}
-
 n_clusters = 5
 
 dados_capes.scaled = select(dados_capes, -Sigla) %>% 
@@ -119,6 +164,30 @@ km %>%
   theme(axis.text.x = element_text(angle = 75, hjust = 1))
 
 autoplot(km, data = dados_capes.scaled, label = TRUE)
+```
+
+Os gráficos apresentados destacam os aspectos principais que caracterizam cada grupo, ou seja, podemos ver quais são as variáveis que se destacam. Além disso, é possível perceber que todos os grupos são distintos, no entanto, alguns possuem certa semelhança, por exemplo os grupos 3 e 5.
+
+### 4.1 Classificação dos grupos
+
+Diante dos gráficos resultantes do agrupamento podemos nomear os grupos e citar algumas universidades que fazem parte deles.
+
+* **Grupo 1:** Universidades de razoável produtividade de periódicos de qualis A2 com boa participação de alunos e com conceito acima da média nacional.
+
+* **Grupo 2:** Universidades de alta produtividade de periódicos de qualis A2 com boa participação de alunos e com conceito acima da média nacional.
+
+* **Grupo 3:** Universidades de baixa produtividade de periódicos de qualis A1 e A2 com baixa particação de alunos e com conceito abaixo da média nacional.
+
+* **Grupo 4:** Universidades de alta produtividade de periódicos de qualis A1 e A2 com boa particação de alunos e com conceito acima da média nacional.
+
+* **Grupo 5:** Universidades de baixa produtividade de periódicos de qualis A1 e A2 com baixa participação de alunos e com conceito na média nacional.
+
+### 4.2 Avaliação do Agrupamento
+
+A silhueta nos permite avaliar o quão cada ponto ou grupo está perto de outros pontos e grupos vizinhos, ou seja, o quão bem os dados foram agrupados. Quando observarmos a silhueta para os grupos encontrados, percebemos que foram muito bem, exceto pelo último grupo com alguns pontos mal agrupados.
+
+```{r, message=FALSE, warning=FALSE}
+
 plot(silhouette(km$cluster, dists), col = RColorBrewer::brewer.pal(n_clusters, "Set2"))
 
 dados_capes.scaled$kmcluster = km$cluster
@@ -132,7 +201,7 @@ km %>%
 
 ```
 
-## PCA
+## 5. PCA
 
 Análise de componentes principais (PCA) é uma técnica usada para enfatizar a variação e trazer padrões fortes em um conjunto de dados. É freqüentemente usado para tornar os dados fáceis de explorar e visualizar. Inicialmente, iremos executar o PCA em nossos dados com scale = TRUE para que sejam feitas as normalizações, evitando o impacto de discrepâncias dos valores nas variâncias. Em seguida, encontraremos e veremos os componentes e sua relação com as variáveis originais.
 
@@ -177,7 +246,7 @@ autoplot(pr.out, label = TRUE, label.size = 3, shape = FALSE,
          loadings.label = TRUE, loadings.label.size = 3)
 ```
 
-## t-SNE
+## 6. t-SNE
 
 Quando executamos análises através do t-SNE, podemos observar o surgimento de cinco grupos bem definidos, o mesmo número de componentes encontrado na análise com PCA. Os componentes destes grupos e também a sua estrutura podem ser vistas nos gráficos seguintes.
 
