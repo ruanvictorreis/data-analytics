@@ -1,0 +1,273 @@
+---
+title: "checkpoint-01"
+author: "-"
+date: "18 de maio de 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+library(readr)
+library(dplyr, warn.conflicts = F)
+library(ggplot2)
+library(lubridate)
+library(resample)
+
+dados_github = read_csv("dados/github-users-committing-filetypes.csv")
+
+```
+
+## 1. Introdução
+
+Neste trabalho iremos analisar os dados de commits no Github. Para tal, recolhemos uma amostra de dados da atividade global do Github. Os dados brutos contém a contagem de quantas pessoas editaram arquivos com cada extensão em cada dia de 2016 e 2017.
+
+Nosso principal objetivo é responder as seguintes perguntas:
+
+* **1) Para cada linguagem de programação, existe uma diferença significativa na sua popularidade durante a semana e durante o fim de semana?**
+
+* **2) Existe uma diferença significativa na variação da popularidade das duas linguagens de programação quando você compara o quanto a popularidade de cada uma varia durante os dias da semana?**
+
+### 1.1 Tratamento dos dados
+
+É importante para esta análise ter conhecimento a respeito da data do commit e o dia da semana que corresponde à referida data. Portanto, utilizamos a biblioteca **lubridate** para obter estes dados, e armazenamos estas informações em novas colunas chamadas *data* e *dia_semana*.
+
+```{r}
+dados_github = dados_github %>% 
+  mutate(data = lubridate::ymd(paste(the_year, the_month, month_day)), 
+         dia_semana = lubridate::wday(data))
+```
+
+### 1.2 Descrição das variáveis
+
+#### 1.2.1 file_extension
+Extensão do arquivo o qual foi realizado o commit.
+
+```{r}
+
+dados_github %>% 
+  ggplot(aes(x = file_extension)) + 
+  geom_bar() + 
+  coord_flip()
+
+```
+
+#### 1.2.2 month_day
+Dia (numérico) do mês o qual foi realizado o commit.
+
+```{r}
+dados_github %>% 
+    ggplot(aes(y = month_day, x = "commits")) + 
+    geom_boxplot(width = .3)
+
+dados_github %>% 
+    ggplot(aes(x = month_day)) + 
+    geom_histogram(bins = 30)
+```
+
+### 1.2.3 the_month
+Mês (numérico) em que o commit foi realizado.
+
+```{r}
+dados_github %>% 
+    ggplot(aes(y = the_month, x = "commits")) + 
+    geom_boxplot(width = .3)
+
+dados_github %>% 
+    ggplot(aes(x = the_month)) + 
+    geom_histogram(bins = 30)
+```
+
+### 1.2.4 the_year
+Ano (numérico) em que o commit foi realizado.
+
+```{r}
+dados_github %>% 
+    ggplot(aes(y = the_year, x = "commits")) + 
+    geom_boxplot(width = .3)
+
+dados_github %>% 
+    ggplot(aes(x = the_year)) + 
+    geom_histogram(bins = 30)
+```
+
+### 1.2.5 users
+Número de usuário que realizaram commit numa determinada data para uma linguagem de programação. Também conhecido nessa análise como métrica para popularidade.
+
+```{r}
+dados_github %>% 
+    ggplot(aes(y = users, x = "commits")) + 
+    geom_boxplot(width = .3)
+
+dados_github %>% 
+    ggplot(aes(x = users)) + 
+    geom_histogram(bins = 30)
+```
+
+## 2. Respondendo as questões
+
+#### 1) Para cada linguagem de programação, existe uma diferença significativa na sua popularidade durante a semana e durante o fim de semana?
+
+Inicialmente, realizamos algumas manipulações nos dados para que nossa análise se torne mais objetiva e de fácil entendimento. Portanto, separamos os dados em 4(quatro) grupos:
+
+* commits em Java no fim de semana (github_java_fds)
+
+* commits em Java durante a semana (github_java_sem)
+
+* commits em Python no fim de semana (github_python_fds)
+
+* commits em Python durante a semana (github_python_sem)
+
+
+Além disso, criamos uma nova coluna (isFDS) de valor booleando (True ou False), onde o valor será verdadeiro se o dia do commit é no fim de semana, ou será falso caso contrário.
+
+
+```{r}
+# Linguagem: Java (java)
+
+github_java = dados_github %>% 
+  filter(file_extension == "java") %>%
+  mutate(isFDS = dia_semana > 5)
+
+github_java_fds = github_java %>% 
+  filter(dia_semana > 5)
+
+github_java_sem = github_java %>%
+  filter(dia_semana < 6)
+```
+
+```{r}
+# Linguagem: Python (py)
+
+github_python = dados_github %>% 
+  filter(file_extension == "py") %>%
+  mutate(isFDS = dia_semana > 5)
+
+github_python_fds = github_python %>% 
+  filter(dia_semana > 5)
+
+github_python_sem = github_python %>%
+  filter(dia_semana < 6)
+```
+
+Nesse ponto, é necessário calcular os intervalos de confiança da média da popularidade para as linguagens de programação Java e Python. Dessa forma, será possível comparar a média da popularidade para os 4(quatro) grupos os quais estamos interessados em analisar. Além disso, plotaremos um gráfico que representa estes intervalos de confiança.
+
+```{r, message=FALSE, warning=FALSE}
+# IC para Java no final de semana
+java_mean.fds =  bootstrap(github_java_fds, mean(users)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+# IC para Java durante a semana
+java_mean.sem = bootstrap(github_java_sem, mean(users)) %>%
+  CI.bca(probs = c(.025, .975))
+
+# IC para Python no final de semana
+python_mean.fds = bootstrap(github_python_fds, mean(users)) %>%
+  CI.bca(probs = c(.025, .975))
+
+# IC para Python durante a semana
+python_mean.sem = bootstrap(github_python_sem, mean(users)) %>%
+  CI.bca(probs = c(.025, .975))
+
+df = data.frame(rbind(java_mean.fds, 
+                      java_mean.sem,
+                      python_mean.fds,
+                      python_mean.sem))
+
+df$`média` = c("Java Final de Semana", "Java Semana", "Python Final de Semana", "Python Semana")
+
+df %>% 
+  ggplot(aes(x = `média`, ymin = X2.5., ymax = X97.5.)) + 
+  geom_errorbar(width = .2)
+```
+
+Dado o gráfico acima, podemos observar que aparentemente existem diferenças significativas de popularidade durante a semana e no fim de semana para as duas linguagens de programação. No entanto, este gráfico não pode nos dar a certeza dessa afirmação, é necessário quantificar essa diferença para saber se é realmente significativa. 
+
+Utilizando a biblioteca bootstrap2, podemos calcular a diferença dos intervalos de confiança para as médias de popularidade. Dessa forma, é possível concluir se a diferença é significativa. O gráfico a seguir calcula a diferenças dos intervalos de confiança para a linguagem de programação Java.
+
+```{r}
+# Java
+b.diff.means = bootstrap2(github_java$users, 
+                          treatment = github_java$isFDS, 
+                          mean)
+
+means.diff = CI.percentile(b.diff.means, probs = c(.05, .95))
+
+data.frame(means.diff) %>% 
+  ggplot(aes(x = "Diferença", ymin = X5., ymax = X95.)) + 
+  geom_errorbar(width = .2) + 
+  geom_hline(yintercept = 0, colour = "darkorange")
+```
+
+De acordo com o gráfico acima, existe sim diferença significativa na popularidade durante a semana e o fim de semana para linguagem Java, tal que o valor 0(zero) não pertence ao intervalo de confiança da diferença. Portanto, podemos concluir que a média de commits da linguagem Java é maior durante a semana do que no fim de semana. Precisamos agora plotar o mesmo gráfico para a linguagem de programação Python. 
+
+```{r}
+# Python
+b.diff.means = bootstrap2(github_python$users, 
+                          treatment = github_python$isFDS, 
+                          mean)
+
+means.diff = CI.percentile(b.diff.means, probs = c(.05, .95))
+
+data.frame(means.diff) %>% 
+  ggplot(aes(x = "Diferença", ymin = X5., ymax = X95.)) + 
+  geom_errorbar(width = .2) + 
+  geom_hline(yintercept = 0, colour = "darkorange")
+```
+
+De acordo com o gráfico acima, existe sim diferença significativa na popularidade durante a semana e o fim de semana para a linguagem de programação Python, tal que o valor 0(zero) não pertence ao intervalo de confiança da diferença. Portanto, podemos concluir que a média de commits da linguagem Python é maior durante a semana do que no fim de semana.
+
+Respondendo à pergunta (1): Sim, existe diferença significativa na popularidade entre commits durante a semana e no fim de semana para as duas linguagens de programação selecionadas.
+
+
+
+#### 2) Existe uma diferença significativa na variação da popularidade das duas linguagens de programação quando você compara o quanto a popularidade de cada uma varia durante os dias da semana?
+
+Para esta questão, precisamos selecionar todos os commit feitos nas linguagens Java e Python durante a semana. Atribuímos estes dados a variável (github_py_java). 
+
+```{r}
+github_py_java = dados_github %>%
+  filter(file_extension == "java" 
+         | file_extension == "py", 
+         dia_semana < 6)
+```
+
+Dessa vez, estamos interessados em analisar a variação da popularidade, então podemos calcular intervalos de confiança utilizando o desvio padrão da popularidade nas linguagens de programação Java e Python, apenas para os commits realizados durante a semana. Plotaremos um gráfico que representa adequadamente estes intervalos de variação. 
+
+```{r, message=FALSE, warning=FALSE}
+# IC para Java durante a semana
+java_sd.sem = bootstrap(github_java_sem, sd(users)) %>%
+  CI.bca(probs = c(.025, .975))
+
+# IC para Python durante a semana
+python_sd.sem = bootstrap(github_python_sem, sd(users)) %>%
+  CI.bca(probs = c(.025, .975))
+
+df = data.frame(rbind(java_sd.sem,
+                      python_sd.sem))
+
+df$`variância` = c("Java Semana", "Python Semana")
+
+df %>% 
+  ggplot(aes(x = `variância`, ymin = X2.5., ymax = X97.5.)) + 
+  geom_errorbar(width = .2)
+```
+
+Aparentemente, existe uma diferença significativa na variação da popularidade entre Java e Python durante a semana. No entanto, este gráfico não pode nos dar a certeza dessa afirmação, é necessário quantificar essa diferença para saber se é realmente significativa.
+
+```{r}
+# Diferença das variações
+b.diff.dp = bootstrap2(github_py_java$users, 
+                          treatment = github_py_java$file_extension, 
+                          sd)
+
+dp.diff = CI.percentile(b.diff.dp, probs = c(.05, .95))
+
+data.frame(dp.diff) %>% 
+  ggplot(aes(x = "Diferença", ymin = X5., ymax = X95.)) + 
+  geom_errorbar(width = .2) + 
+  geom_hline(yintercept = 0, colour = "darkorange")
+```
+
+De acordo com o gráfico acima, existe sim diferença significativa na variação da popularidade durante a semana entre as linguagens de programação Java e Python, tal que o valor 0(zero) não pertence ao intervalo de confiança da diferença. Portanto, podemos concluir que a variação do número commits da linguagem Python é maior do que os commits para a linguagem Java durante a semana.
+
+Respondendo à pergunta (2): Sim, existe diferença significativa na variação da popularidade das linguagens de programação Java e Python para os commits realizados durante a semana.
