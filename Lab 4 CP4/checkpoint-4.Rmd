@@ -1,0 +1,290 @@
+---
+title: "checkpoint-4"
+output: html_document
+---
+
+## 1. Introdução
+
+Neste trabalho iremos analisar os dados de commits no Github. Para tal, recolhemos uma amostra de dados da atividade global do Github. Os dados brutos contém a contagem de quantas pessoas editaram arquivos com cada extensão em cada dia de 2016 e 2017.
+
+Nosso principal objetivo é responder as seguintes perguntas:
+
+* **1) Em quais dias da semana ocorrem os maiores números de edições em arquivos de extensão .py (Python)?**
+
+* **2) Existe uma diferença significativa nos números de edições em arquivos de extensão .py (Python) considerando o 1º semestre e o 2º semestre?**
+
+```{r, include=FALSE}
+
+library(readr)
+library(dplyr, warn.conflicts = F)
+library(ggplot2)
+library(lubridate)
+library(resample)
+
+dados_github = read_csv("dados/github-users-committing-filetypes.csv")
+
+dados_github = dados_github %>%
+  mutate(data = lubridate::ymd(paste(the_year, the_month, month_day)), 
+  dia_semana = lubridate::wday(data, label = T))
+```
+## 2. Descrição das variáveis
+
+### 2.1 file_extension
+Extensão do arquivo o qual foi realizado o commit.
+
+```{r}
+
+dados_github %>% 
+  ggplot(aes(x = file_extension)) + 
+  geom_bar() + 
+  coord_flip()
+
+```
+
+### 2.2 month_day
+Dia (numérico) do mês o qual foi realizado o commit.
+
+```{r}
+dados_github %>% 
+    ggplot(aes(y = month_day, x = "commits")) + 
+    geom_boxplot(width = .3)
+```
+
+### 2.3 the_month
+Mês (numérico) em que o commit foi realizado.
+
+```{r}
+dados_github %>% 
+    ggplot(aes(y = the_month, x = "commits")) + 
+    geom_boxplot(width = .3)
+
+dados_github %>% 
+    ggplot(aes(x = the_month)) + 
+    geom_bar() +
+    scale_x_continuous(breaks=c(1,2,3,4,5,6,7,8,9,10,11,12))
+```
+
+### 2.4 the_year
+Ano (numérico) em que o commit foi realizado.
+
+```{r}
+dados_github %>% 
+    ggplot(aes(x = the_year)) + 
+    geom_bar() +
+    scale_x_continuous(breaks=c(2016, 2017))
+```
+
+### 2.5 users
+Número de usuário que realizaram commit numa determinada data para uma linguagem de programação. Também conhecido nessa análise como métrica para popularidade ou produtividade.
+
+```{r}
+dados_github %>% 
+    ggplot(aes(y = users, x = "commits")) + 
+    geom_boxplot(width = .3)
+
+dados_github %>% 
+    ggplot(aes(x = users)) + 
+    geom_histogram(bins = 30)
+```
+
+## 3. Tratamentos dos dados
+
+Para realizar nossa análise estatística, é necessário que os dados estejam organizados em grupos, dessa forma, será possível compará-los e observar as características que nos interessam. Inicialmente, filtramos os dados para obter apenas as edições em arquivos Python (py), posteriormente, dividimos estes dados em grupos para cada dia da semana. Além disso, também separamos os dados em "edições realizadas no 1º semestre" e "edições realizadas no 2º semestre", e criamos uma nova variável para esta informação.
+
+```{r}
+# Filtrando por arquivos Python
+python_github = dados_github %>% 
+  filter(file_extension == "py")
+
+# Filtrando por dias da semana
+python_mon = python_github %>% 
+  filter(dia_semana == "Mon")
+
+python_tues = python_github %>% 
+  filter(dia_semana == "Tues")
+
+python_wed = python_github %>% 
+  filter(dia_semana == "Wed")
+
+python_thurs = python_github %>% 
+  filter(dia_semana == "Thurs")
+
+python_fri = python_github %>% 
+  filter(dia_semana == "Fri")
+
+# Filtrando por semestre de um ano
+python_first_semester = python_github %>%
+  filter(the_month <= 6)
+
+python_second_semester = python_github %>%
+  filter(the_month > 6)
+
+# Criando nova coluna 'semestre'
+python_github = python_github %>% 
+  mutate(semester = ifelse(the_month <= 6, "1º semestre", "2º semestre") )
+
+```
+
+## 4. Perguntas
+
+### 4.1 Em quais dias da semana ocorrem os maiores números de edições em arquivos de extensão .py (Python)?
+
+Utilizando da técnica de bootstrap podemos construir intervalos de confiança para representar a média de edições realizadas em arquivos Python durante cada dia da semana. O seguinte gráfico descreve tais intervalos de confiança. 
+
+```{r, message=FALSE, warning=FALSE}
+py_mon.mean =  bootstrap(python_mon, mean(users)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+py_tues.mean =  bootstrap(python_tues, mean(users)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+py_wed.mean =  bootstrap(python_wed, mean(users)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+py_thurs.mean =  bootstrap(python_thurs, mean(users)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+py_fri.mean =  bootstrap(python_fri, mean(users)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+df = data.frame(rbind(py_mon.mean, 
+                      py_tues.mean,
+                      py_wed.mean,
+                      py_thurs.mean,
+                      py_fri.mean))
+
+df$`média` = c("Segunda-feira", "Terça-feira", "Quarta-feira", "Quinta-feira", "Sexta-feira")
+
+df %>% 
+  ggplot(aes(x = `média`, ymin = X2.5., ymax = X97.5.)) + 
+  geom_errorbar(width = .2)
+
+```
+
+De acordo com o gráfico apresentado, a terça-feira parece ser o dia em que existe um maior número de edições de arquivos Python. No entanto, tal gráfico não pode nos certificar de que essa afirmação é correta, assim tornando necessário a quantificação da diferença em relação aos outros dias, assim, possibilitando realizar uma avaliação da diferença entre os intervalos de confiança, e concluir se tal diferença é realmente significativa.
+
+Inicialmente, iremos analisar a diferença entre os intervalos de confiança da terça-feira e quarta-feira.
+
+```{r}
+# Diferença entre Terça-feira e Quarta-feira
+
+python_tues_wed = mapply(c, python_tues, python_wed, SIMPLIFY=FALSE)
+
+btw.diff.mean = bootstrap2(python_tues_wed$users, 
+                          treatment = python_tues_wed$dia_semana, 
+                          mean)
+
+dtw.diff = CI.percentile(btw.diff.mean, probs = c(.05, .95))
+
+data.frame(dtw.diff) %>% 
+  ggplot(aes(x = "Diferença", ymin = X5., ymax = X95.)) + 
+  geom_errorbar(width = .2) + 
+  geom_hline(yintercept = 0, colour = "darkorange")
+
+```
+
+Dado o gráfico da diferença entre os intervalos de confiança da terça-feira e quarta-feira, podemos dizer que não existe uma diferença significativa na quantidade de edições entre estes dias, tal que o valor zero pertence ao intervalo da diferença. Portanto, não podemos afirmar que a terça-feira é o único dia que possui maior número de edições em arquivos Python.
+
+Em busca de uma resposta para nossa questão, iremos agora analisar a diferença entre os intervalos de confiança da terça-feira e quinta-feira. 
+
+```{r}
+# Diferença entre Terça-feira e Quinta-feira
+
+python_tues_thurs = mapply(c, python_tues, python_thurs, SIMPLIFY=FALSE)
+
+btt.diff.mean = bootstrap2(python_tues_thurs$users, 
+                          treatment = python_tues_thurs$dia_semana, 
+                          mean)
+
+dtt.diff = CI.percentile(btt.diff.mean, probs = c(.05, .95))
+
+data.frame(dtt.diff) %>% 
+  ggplot(aes(x = "Diferença", ymin = X5., ymax = X95.)) + 
+  geom_errorbar(width = .2) + 
+  geom_hline(yintercept = 0, colour = "darkorange")
+```
+
+Dado o gráfico da diferença entre os intervalos de confiança da terça-feira e da quinta-feira, podemos dizer que também não existe uma diferença significativa na quantidade de edições entre estes dias, tal que o valor zero pertence ao intervalo da diferença. Portanto, concluímos que a terça-feira não é significativamente maior em número de edições de arquivos Python, quando comparado à quarta-feira e a quinta-feira.
+
+Nesse ponto, dado que a terça-feira não é significativamente maior em números de edições de arquivos Python, estamos interessados em comparar a quarta-feira e a quinta-feira.
+
+```{r}
+# Diferença entre Quarta-feira e Quinta-feira
+
+python_wed_thurs = mapply(c, python_wed, python_thurs, SIMPLIFY=FALSE)
+
+bwt.diff.mean = bootstrap2(python_wed_thurs$users, 
+                          treatment = python_wed_thurs$dia_semana, 
+                          mean)
+
+dwt.diff = CI.percentile(bwt.diff.mean, probs = c(.05, .95))
+
+data.frame(dwt.diff) %>% 
+  ggplot(aes(x = "Diferença", ymin = X5., ymax = X95.)) + 
+  geom_errorbar(width = .2) + 
+  geom_hline(yintercept = 0, colour = "darkorange")
+```
+
+Dado o gráfico da diferença entre os intervalos de confiança da quarta-feira e da quinta-feira, podemos dizer que também não existe uma diferença significativa na quantidade de edições entre estes dias, tal que o valor zero pertence ao intervalo da diferença. Portanto, concluímos que para a terça-feira, quarta-feira e quinta-feira, não existe uma diferença significativa no número de edições de arquivos Python.
+
+Entre os três intervalos analisados até agora, o da quinta-feira é o que se encontra em uma posição mais inferior, ou seja, é o mais próximo do intervalo da segunda-feira. Portanto, é interessante para esta análise, avaliar se existe uma diferença significativa entre eles.
+
+```{r}
+# Diferença entre Quinta-feira e Segunda-feira
+python_thurs_mon = mapply(c, python_thurs, python_mon, SIMPLIFY=FALSE)
+
+btm.diff.mean = bootstrap2(python_thurs_mon$users, 
+                          treatment = python_thurs_mon$dia_semana, 
+                          mean)
+
+dtm.diff = CI.percentile(btm.diff.mean, probs = c(.05, .95))
+
+data.frame(dtm.diff) %>% 
+  ggplot(aes(x = "Diferença", ymin = X5., ymax = X95.)) + 
+  geom_errorbar(width = .2) + 
+  geom_hline(yintercept = 0, colour = "darkorange")
+```
+
+De acordo com gráfico da diferença entre os intervalos de confiança da quinta-feira e da segunda-feira, podemos dizer que existe sim uma diferença significativa na quantidade de edições entre estes dias. Portanto, podemos concluir que se existe uma diferença significativa entre a quinta-feira e a segunda-feira, então, também existe uma diferença significativa entre a segunda-feira em relação a terça-feira e a quarta-feira, dados que a distância entre os intervalos é ainda maior. O mesmo princípio pode ser aplicado a sexta-feira que é o intervalo em posição mais inferior.
+
+#### Resposta:
+Na terça-feira, quarta-feira e quinta-feira, ocorrem a maior quantidade de edições em arquivos de extensão py (Python), portanto, podemos considerar que nesses dias os desenvolvedores são mais produtivos. Em contraste, temos que na segunda-feira e sexta-feira ocorrem um menor número de edições, ou seja, os desenvolvedores são menos produtivos dado a proximidade do fim de semana.  
+
+### 4.2 Existe uma diferença significativa nos números de edições em arquivos de extensão .py (Python) considerando o 1º semestre e o 2º semestre?
+
+Inicialmente, queremos observar os intervalos de confiança para a média de edições de arquivos Python, considerando o primeiro e o segundo semestre de um ano qualquer.
+
+```{r, message=FALSE, warning=FALSE}
+py_first_semester.mean =  bootstrap(python_first_semester, mean(users)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+py_second_semester.mean =  bootstrap(python_second_semester, mean(users)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+dfs = data.frame(rbind(py_first_semester.mean,
+                      py_second_semester.mean))
+
+dfs$`média` = c("1º Semestre", "2º Semestre")
+
+dfs %>% 
+  ggplot(aes(x = `média`, ymin = X2.5., ymax = X97.5.)) + 
+  geom_errorbar(width = .2)
+```
+
+Dado o gráfico apresentado, parece que durante o primeiro semestre, a quantidade de edições de arquivos Python é bem maior quando comparamos ao segundo semestre. No entanto, tal gráfico não pode nos certificar de que essa afirmação é correta, é necessário quantificar a diferença para concluir se ela é realmente significativa.
+
+```{r}
+bs.diff.mean = bootstrap2(python_github$users, 
+                          treatment = python_github$semester, 
+                          mean)
+
+dps.diff = CI.percentile(bs.diff.mean, probs = c(.05, .95))
+
+data.frame(dps.diff) %>% 
+  ggplot(aes(x = "Diferença", ymin = X5., ymax = X95.)) + 
+  geom_errorbar(width = .2) + 
+  geom_hline(yintercept = 0, colour = "darkorange")
+```
+
+#### Resposta:
+De acordo com o gráfico da diferença entre os intervalos de confiança, existe sim uma diferença significativa nos números de edições em arquivos de extensão .py (Python), quando comparamos o primeiro e o segundo semestre de um ano qualquer. Ou seja, os desenvolvedores Python, geralmente, são mais produtivos no 1º semestre do ano.
