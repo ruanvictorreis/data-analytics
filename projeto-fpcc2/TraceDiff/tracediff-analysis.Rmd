@@ -1,0 +1,185 @@
+---
+title: "tracediff-analysis"
+author: "Ruan Reis"
+date: "4 de julho de 2017"
+output: html_notebook
+---
+
+```{r setup, include=FALSE}
+
+library(readr)
+library(dplyr, warn.conflicts = F)
+library(ggplot2)
+library(resample)
+
+data_experiment = read_csv("dados/TraceDiff- Experiments Data.csv")
+
+data_survey = read_csv("dados/TraceDiff- Survey Data.csv")
+
+```
+
+```{r, echo=FALSE}
+
+tracediff_data = data_experiment %>% 
+  filter(condition == 'TD')
+
+pythontutor_data = data_experiment %>% 
+  filter(condition == 'PT')
+
+```
+
+## 1. Bugs solucionados
+
+### 1.1 Intervalos de confiança 
+```{r, echo=FALSE}
+
+ggplot(data_experiment, aes(y = fixed_fault, x = condition)) + 
+  stat_summary(fun.data = "mean_cl_boot") + 
+  coord_flip()
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+tracediff_fixed.mean =  bootstrap(tracediff_data, mean(fixed_fault)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+pythontutor_fixed.mean =  bootstrap(pythontutor_data, mean(fixed_fault)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+df = data.frame(rbind(tracediff_fixed.mean, 
+                      pythontutor_fixed.mean))
+
+df$`média` = c("TraceDiff", "Python Tutor")
+
+df %>% 
+  ggplot(aes(x = `média`, ymin = X2.5., ymax = X97.5.)) + 
+  geom_errorbar(width = .2)
+
+```
+
+### 1.2 Diferença entre intervalos de confiança 
+
+```{r, echo=FALSE}
+
+fixed.diff.mean = bootstrap2(data_experiment$fixed_fault, 
+                          treatment = data_experiment$condition, 
+                          mean)
+
+fixed.diff = CI.percentile(fixed.diff.mean, probs = c(.05, .95))
+
+data.frame(fixed.diff) %>% 
+  ggplot(aes(x = "Diferença", ymin = X5., ymax = X95.)) + 
+  geom_errorbar(width = .2) + 
+  geom_hline(yintercept = 0, colour = "darkorange")
+```
+**Diferença não é significativa**
+
+### 1.3 P-value
+```{r, echo=FALSE}
+permutationTest2(data_experiment, mean(fixed_fault), treatment = condition)
+```
+
+## 2. Bugs identificados
+
+### 2.1 Intervalos de confiança 
+```{r, echo=FALSE}
+
+ggplot(data_experiment, aes(y = identified_fault, x = condition)) + 
+  stat_summary(fun.data = "mean_cl_boot") + 
+  coord_flip()
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+tracediff_identified.mean =  bootstrap(tracediff_data, mean(identified_fault)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+pythontutor_identified.mean =  bootstrap(pythontutor_data, mean(identified_fault)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+df = data.frame(rbind(tracediff_identified.mean, 
+                      pythontutor_identified.mean))
+
+df$`média` = c("TraceDiff", "Python Tutor")
+
+df %>% 
+  ggplot(aes(x = `média`, ymin = X2.5., ymax = X97.5.)) + 
+  geom_errorbar(width = .2)
+
+```
+
+### 2.2 Diferença entre intervalos de confiança 
+
+```{r, echo=FALSE}
+
+identified.diff.mean = bootstrap2(data_experiment$identified_fault, 
+                          treatment = data_experiment$condition, 
+                          mean)
+
+identified.diff = CI.percentile(identified.diff.mean, probs = c(.05, .95))
+
+data.frame(identified.diff) %>% 
+  ggplot(aes(x = "Diferença", ymin = X5., ymax = X95.)) + 
+  geom_errorbar(width = .2) + 
+  geom_hline(yintercept = 0, colour = "darkorange")
+```
+**Diferença não é significativa**
+
+### 2.3 P-value
+```{r, echo=FALSE}
+permutationTest2(data_experiment, mean(identified_fault), treatment = condition)
+```
+
+## 3. Tempo
+
+### 3.1 Intervalos de confiança 
+```{r, echo=FALSE}
+
+ggplot(data_experiment, aes(y = time, x = condition)) + 
+  stat_summary(fun.data = "mean_cl_boot") + 
+  coord_flip()
+
+```
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+
+tracediff_time.mean =  bootstrap(tracediff_data, mean(time)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+pythontutor_time.mean =  bootstrap(pythontutor_data, mean(time)) %>% 
+  CI.bca(probs = c(.025, .975))
+
+df = data.frame(rbind(tracediff_time.mean, 
+                      pythontutor_time.mean))
+
+df$`média` = c("TraceDiff", "Python Tutor")
+
+df %>% 
+  ggplot(aes(x = `média`, ymin = X2.5., ymax = X97.5.)) + 
+  geom_errorbar(width = .2)
+
+```
+
+### 3.2 Diferença entre intervalos de confiança 
+
+```{r, echo=FALSE}
+
+time.diff.mean = bootstrap2(data_experiment$time, 
+                          treatment = data_experiment$condition, 
+                          mean)
+
+time.diff = CI.percentile(time.diff.mean, probs = c(.05, .95))
+
+data.frame(time.diff) %>% 
+  ggplot(aes(x = "Diferença", ymin = X5., ymax = X95.)) + 
+  geom_errorbar(width = .2) + 
+  geom_hline(yintercept = 0, colour = "darkorange")
+```
+**Diferença não é significativa**
+
+### 3.3 P-value
+```{r, echo=FALSE}
+permutationTest2(data_experiment, mean(time), treatment = condition)
+```
