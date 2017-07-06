@@ -1,0 +1,63 @@
+---
+title: "checkpoint-2"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(readr)
+library(dplyr, warn.conflicts = F)
+library(ggplot2)
+library(tidyverse)
+library(modelr)
+library(broom)
+library(openintro)
+
+data_evaluation = read_csv("dados/evals.csv")
+```
+
+# A intuição
+```{r}
+ggplot(data_evaluation, aes(x = bty_avg, y = score)) + 
+  geom_point(alpha = 0.4)
+```
+
+No olho:
+
+```{r}
+ggplot(data_evaluation, aes(y = score, x = bty_avg)) + 
+  geom_point(alpha = 0.4) + 
+  geom_abline(intercept = 7, slope = -.65, color  = "red") 
+```
+
+lm  == linear model
+
+```{r}
+ggplot(data_evaluation, aes(y = score, x = bty_avg)) + 
+  geom_point(alpha = 0.4) + geom_smooth(method = "lm", se = FALSE)
+```
+
+```{r}
+mod <- lm(score ~ bty_avg, data = data_evaluation)
+
+# sintaxe base R:
+summary(mod)
+confint(mod)
+
+# broom, que acho mais recomendável: 
+tidy(mod, conf.int = TRUE)
+# glance(mod) # depois falaremos desse
+
+data_evaluation %>% 
+  add_predictions(model = mod) %>% # add o que o modelo estima p cada hs_grad
+  ggplot(mapping = aes(x = bty_avg, y = score)) + 
+  geom_point(alpha = 0.4, size = .5) + 
+  geom_line(aes(y = pred), colour = "red") # + geom_abline(intercept = 70, slope = -.65, color  = "darkblue") 
+```
+
+```{r}
+data_evaluation %>% 
+  add_residuals(model = mod) %>% 
+  ggplot(aes(score, resid)) + 
+  geom_point(alpha = .4) + 
+  geom_hline(yintercept = 0, colour = "blue")
+```
