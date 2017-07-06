@@ -1,0 +1,181 @@
+---
+title: "checkpoint-5"
+output: html_notebook
+---
+
+## 1. Introdução
+
+Neste trabalho iremos analisar os dados de commits no Github. Para tal, recolhemos uma amostra de dados da atividade global do Github. Os dados brutos contêm a contagem de quantas pessoas editaram arquivos com cada extensão em cada dia de 2016 e 2017. Os dados podem ser encontrados em: https://raw.githubusercontent.com/nazareno/fpcc2/master/datasets/github-users-committing-filetypes.csv
+
+Nosso principal objetivo é responder a seguinte pergunta através do teste de hipótese:
+
+* **Existe uma diferença significativa nos números de edições em arquivos de extensão .py (Python) considerando o 1º semestre e o 2º semestre de um ano?**
+
+```{r setup, include=FALSE}
+library(readr)
+library(dplyr, warn.conflicts = F)
+library(ggplot2)
+library(lubridate)
+library(resample)
+
+dados_github = read_csv("dados/github-users-committing-filetypes.csv")
+
+dados_github = dados_github %>%
+  mutate(data = lubridate::ymd(paste(the_year, the_month, month_day)), 
+  dia_semana = lubridate::wday(data, label = T))
+```
+
+## 2. Descrição das variáveis
+
+Para realizar nossa análise estatística, é necessário que os dados estejam organizados em grupos, dessa forma, será possível compará-los e observar as características que nos interessam. Inicialmente, filtramos os dados para obter apenas as edições em arquivos Python (py), posteriormente, dividimos estes dados em grupos para cada dia da semana. Além disso, também separamos os dados em "edições realizadas no 1º semestre" e "edições realizadas no 2º semestre", e criamos uma nova variável para esta informação.
+
+```{r}
+# Filtrando por arquivos Python
+python_github = dados_github %>% 
+  filter(file_extension == "py")
+
+# Filtrando por semestre de um ano
+python_first_semester = python_github %>%
+  filter(the_month <= 6)
+
+python_second_semester = python_github %>%
+  filter(the_month > 6)
+
+# Criando nova coluna 'semestre'
+python_github = python_github %>% 
+  mutate(semester = ifelse(the_month <= 6, "1º semestre", "2º semestre"))
+```
+
+### 2.1 file_extension
+
+Extensão do arquivo o qual foi realizado o commit. Para nossa análise estamos considerando apenas os arquivos de extensão .py referentes à linguagem de programação Python. Nesse caso, são 496 observações que estão sendo analisadas.
+
+### 2.2 month_day
+
+Dia (numérico) do mês o qual foi realizado o commit.
+
+```{r}
+python_github %>% 
+    ggplot(aes(y = month_day, x = "commits")) + 
+    geom_boxplot(width = .3)
+```
+
+### 2.3 the_month
+
+Mês (numérico) em que o commit foi realizado.
+
+```{r}
+python_github %>% 
+    ggplot(aes(y = the_month, x = "commits")) + 
+    geom_boxplot(width = .3)
+
+python_github %>% 
+    ggplot(aes(x = the_month)) + 
+    geom_bar() +
+    scale_x_continuous(breaks=c(1,2,3,4,5,6,7,8,9,10,11,12))
+```
+
+### 2.4 the_year
+
+Ano (numérico) em que o commit foi realizado.
+
+```{r}
+python_github %>% 
+    ggplot(aes(x = the_year)) + 
+    geom_bar() +
+    scale_x_continuous(breaks=c(2016, 2017))
+```
+
+### 2.5 users
+
+Número de usuário que realizaram commit numa determinada data para uma linguagem de programação. Também conhecido nessa análise como métrica para popularidade ou produtividade.
+
+```{r}
+python_github %>% 
+    ggplot(aes(y = users, x = "commits")) + 
+    geom_boxplot(width = .3)
+
+python_github %>% 
+    ggplot(aes(x = users)) + 
+    geom_histogram(bins = 30)
+```
+
+## 3. Revisitando à pergunta
+
+**Pergunta:** Existe uma diferença significativa nos números de edições em arquivos de extensão .py (Python) considerando o 1º semestre e o 2º semestre de um ano?
+
+Em nossa análise, queremos descobrir em qual semestre do ano os desenvolvedores são mais produtivos. Para responder tal pergunta, precisamos comparar a média de commits para os dois semestres do ano, e avaliar se essa diferença entre as médias é significativa. Dessa forma, poderemos decidir em qual semestre do ano os desenvolvedores são mais produtivos.
+
+### 3.1 Médias
+
+```{r}
+medias1x2 = python_github %>% 
+  group_by(semester) %>% 
+  summarise(media = mean(users))
+
+medias1x2
+
+diff.media.observada.1x2 = diff(medias1x2$media)
+```
+
+### 3.2 Intervalos de confiança
+
+```{r}
+ggplot(python_github, aes(y = users, x = semester)) + 
+  stat_summary(fun.data = "mean_cl_boot") + 
+  coord_flip()
+```
+
+### 3.3 Teste de hipótese com permutação
+
+* **Hipótese nula:** Não existe diferença significativa no número de edições em arquivos de extensão .py comparando o 1º e semestre e o 2º semestre de um ano.
+
+* **Hipótese alternativa:** Existe diferença significativa no número de edições em arquivos de extensão .py comparando o 1º semestre e o 2º semestre de um ano.
+
+Desejamos que a hipótese nula seja refutada, para que isso aconteça, a diferença entre as médias de commits do 1º e 2º semestre deve ser significativa.
+
+Realizamos a permutação de forma aleatória entre todos os registros de commits diários para os arquivos de extensão .py (Python). Para cada interação, permutamos os registros pelo semestre, e mantivemos fixo a quantidade de edições, dessa forma, obtivemos como resultado várias médias aleatórias. Realizamos esse processo 10.000 vezes e plotamos um histograma com todas as médias obtidas de forma aleatória pela permutação e a médias antes de permutar os valores.
+
+```{r}
+set.seed(1)
+diffs = replicate(10000, {
+  medias = python_github %>% 
+    mutate(id_embaralhado = sample(semester, n())) %>% 
+    group_by(id_embaralhado) %>% 
+    summarise(media = mean(users))
+  e1 = medias %>% 
+    filter(id_embaralhado == "1º semestre")
+  e4 = medias %>% 
+    filter(id_embaralhado == "2º semestre")
+  return(e1$media - e4$media)
+})
+
+tibble(diferenca = diffs) %>% 
+  ggplot(aes(x = diferenca)) + 
+  geom_histogram(bins = 30) + 
+  geom_vline(xintercept = diff.media.observada.1x2, size = 2)
+```
+
+De acordo com o gráfico, a diferença entre as médias está distante do valor zero. Para que a hipótese nula fosse reforçada, seria necessário que a linha da diferença entre as médias estivesse mais próxima do zero. Portanto, calculamos o p-value assumindo um nível de significância de 5% para nos certificar de que podemos rejeitar a hipótese nula.
+
+```{r}
+permutationTest2(python_github, mean(users), treatment = semester)
+```
+
+Obtivemos como resultado um p-value de 0.00002, o qual é um valor bastante significativo quando comparado ao valor de significância de 5% assumido para este estudo. Portanto, podemos refutar a hipótese nula, e assumir um coeficiente de confiança de 0.99998.
+
+Finalmente, podemos afirmar que existe uma diferença significativa no número de commits em arquivos de extensão .py, comparando o 1º e o 2º semestre de um ano.
+
+## Vantagens e desvantagens
+
+Neste trabalho utilizamos intervalos de confiança e p-value para fazer conclusões sobre nossa pergunta de pesquisa. Ambos os métodos nos permitem chegar a mesma conclusão, porém de formas diferentes. 
+
+O p-value se mostrou ser mais objetivo e mais simples para tirar conclusões. No entanto, a atribuição do valor da significância parece ser um "chute", ou seja, não há muitas explicações para o fato do valor de 5% ser melhor aceito pela academia.
+
+O intervalo de confiança, apesar de ser mais trabalhoso, nos permite tirar conclusões visualmente mais concretas. Isso acontece pelo simples fato de ICs evidenciarem os extremos e possibilitarem analisar as diferenças entre eles. 
+
+## Conclusão
+
+Nesse estudo, analisamos os números de commits em arquivos de extensão .py para responder a seguinte questão: **Existe uma diferença significativa nos números de edições em arquivos de extensão .py (Python) considerando o 1º semestre e o 2º semestre de um ano?**
+
+Nossas análises nos levaram a um p-valor de 0.00002, o qual nos permitiu refutar a hipótese nula, e nos trouxe evidências de que existe uma diferença significativa no número de commit em arquivos Python comparando o 1º e o 2º semestre de um ano. Além disso, foi evidenciado que os desenvolvedores Python são mais produtivos durante o primeiro semestre.
